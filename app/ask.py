@@ -13,23 +13,30 @@
 import argparse
 
 from google import genai
-from google.genai import errors
+from google.genai import errors, types
 
 from app.config import MODEL, api_error_message, get_api_key
 
 # 講座に固有の質問。正しい答えは data/glossary.json の homework-levels にある
 DEFAULT_QUESTION = "AIE2026の講座の宿題にある「3レベル」とは何ですか？"
-
+TEMPERATURE = 0.5
 
 def ask(question: str) -> str:
     client = genai.Client(api_key=get_api_key())
-    response = client.models.generate_content(model=MODEL, contents=question)
+    response = client.models.generate_content(
+        model=MODEL,
+        contents=question,
+        config=types.GenerateContentConfig(temperature=TEMPERATURE),
+    )
 
-    # TODO(第1回 演習): response.usage_metadata から
-    #   入力トークン数と出力トークン数を表示してみよう（Copilotに頼んでよい）
+    usage = response.usage_metadata
+    input_tokens = usage.prompt_token_count if usage else None
+    output_tokens = usage.candidates_token_count if usage else None
+    input_count = f"{input_tokens} tokens" if input_tokens is not None else "不明"
+    output_count = f"{output_tokens} tokens" if output_tokens is not None else "不明"
+    print(f"[usage] 入力: {input_count} / 出力: {output_count}")
 
     return response.text
-
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="素のLLMに質問する")
