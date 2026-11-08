@@ -5,11 +5,16 @@
 """
 
 import json
+import random
+import re
 from functools import cache
 from pathlib import Path
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 MAX_RESULTS = 3
+_HINT_WORD_PATTERN = re.compile(
+    r"[一-龯々〆ヵヶ]+(?:[ぁ-ゖー]+)?|[ぁ-ゖー]{2,}|[ァ-ヺー]{2,}|[A-Za-z0-9]+(?:[-_][A-Za-z0-9]+)*"
+)
 
 
 @cache
@@ -77,3 +82,45 @@ def get_lecture_summary(lecture: int) -> str:
         available = sorted(p.stem for p in (DATA_DIR / "lectures").glob("*.md"))
         return f"第{lecture}回の要点はまだありません。用意されている回: {', '.join(available)}"
     return path.read_text(encoding="utf-8")
+
+
+def make_quiz(lecture: int) -> str:
+    """指定した回の用語から重要な単語を選び、確認問題と答えを返す。
+    「第2回の確認問題を出して」のように、復習用の問題を求められたときに使う。
+    """
+    terms = [term for term in load_glossary() if term["lecture"] == lecture]
+    if not terms:
+        return f"第{lecture}回の用語が見つかりませんでした。"
+
+    term = random.choice(terms)
+    return json.dumps(
+        {
+            "question": f"「{term['term']}」の意味は？",
+            "answer": term["definition"],
+        },
+        ensure_ascii=False,
+    )
+
+
+def make_quiz_hint(question: str, answer: str) -> str:
+    """確認問題と答えを受け取り、答えの単語を一部伏せたヒントを返す。
+
+    確認問題のヒントを求められたとき、make_quiz の question と answer を渡して使う。
+    """
+    words = list(_HINT_WORD_PATTERN.finditer(answer))
+    if not words:
+        return f"問題: {question}\nヒント: □"
+
+    hidden_starts = {
+        word.start()
+        for word in random.sample(words, k=max(1, (len(words) + 1) // 2))
+    }
+    parts = []
+    cursor = 0
+    for word in words:
+        parts.append(answer[cursor:word.start()])
+        parts.append("□" if word.start() in hidden_starts else word.group())
+        cursor = word.end()
+    parts.append(answer[cursor:])
+    masked_answer = "".join(parts)
+    return f"問題: {question}\nヒント: {masked_answer}"
