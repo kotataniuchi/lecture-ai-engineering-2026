@@ -39,6 +39,40 @@ def test_lecture_summary():
     assert "まだありません" in tools.get_lecture_summary(99)
 
 
+def test_make_quiz_uses_a_term_from_the_requested_lecture(monkeypatch):
+    terms = [term for term in tools.load_glossary() if term["lecture"] == 2]
+    monkeypatch.setattr(tools.random, "choice", lambda choices: choices[0])
+
+    quiz = json.loads(tools.make_quiz(2))
+
+    assert quiz == {
+        "question": f"「{terms[0]['term']}」の意味は？",
+        "answer": terms[0]["definition"],
+    }
+
+
+def test_make_quiz_reports_when_lecture_has_no_terms():
+    assert "第0回の用語が見つかりませんでした" in tools.make_quiz(0)
+
+
+def test_make_quiz_hint_masks_half_of_the_answer_words(monkeypatch):
+    answer = "少ない追加パラメータでモデルを調整する手法。"
+    monkeypatch.setattr(tools.random, "sample", lambda words, k: words[:k])
+
+    hint = tools.make_quiz_hint("「LoRA」の意味は？", answer)
+
+    assert "「LoRA」の意味は？" in hint
+    assert "ヒント:" in hint
+    assert hint.count("□") == 3
+    assert answer not in hint
+    assert "モデル" in hint
+    assert "手法" in hint
+
+
+def test_make_quiz_hint_masks_empty_answer():
+    assert tools.make_quiz_hint("問題", "") == "問題: 問題\nヒント: □"
+
+
 def test_default_question_of_lecture1_is_answerable_from_glossary():
     """第1回の既定の質問（app.ask）は、第3回のエージェントが用語集で正しく答えられること。"""
     from app.ask import DEFAULT_QUESTION
